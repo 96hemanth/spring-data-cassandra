@@ -21,11 +21,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import com.datastax.driver.core.Session;
 import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.core.CassandraTemplate;
+import org.springframework.data.cassandra.core.cql.CqlTemplate;
 import org.springframework.data.cassandra.core.query.Query;
 import org.springframework.data.cassandra.repository.CassandraRepository;
 import org.springframework.data.cassandra.repository.query.CassandraEntityInformation;
+import org.springframework.data.cassandra.util.SpaceRegistryUtil;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.util.StreamUtils;
@@ -36,6 +39,9 @@ import com.datastax.driver.core.querybuilder.Insert;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.datastax.driver.core.querybuilder.Select;
 
+
+import com.datastax.driver.core.Cluster;
+import com.datastax.driver.core.Cluster.Builder;
 /**
  * Repository base implementation for Cassandra.
  *
@@ -47,8 +53,9 @@ import com.datastax.driver.core.querybuilder.Select;
 public class SimpleCassandraRepository<T, ID> implements CassandraRepository<T, ID> {
 
 	private final CassandraEntityInformation<T, ID> entityInformation;
+	private SpaceRegistryUtil spaceIdUtil = new SpaceRegistryUtil();
 
-	private final CassandraOperations operations;
+	private  CassandraOperations operations;
 
 	/**
 	 * Create a new {@link SimpleCassandraRepository} for the given {@link CassandraEntityInformation}
@@ -62,6 +69,7 @@ public class SimpleCassandraRepository<T, ID> implements CassandraRepository<T, 
 		Assert.notNull(metadata, "CassandraEntityInformation must not be null");
 		Assert.notNull(operations, "CassandraOperations must not be null");
 
+
 		this.entityInformation = metadata;
 		this.operations = operations;
 	}
@@ -72,6 +80,8 @@ public class SimpleCassandraRepository<T, ID> implements CassandraRepository<T, 
 	@Override
 	public <S extends T> S save(S entity) {
 
+
+		this.operations = spaceIdUtil.getSession(entity);
 		Assert.notNull(entity, "Entity must not be null");
 
 		Insert insert = createInsert(entity);
@@ -79,6 +89,15 @@ public class SimpleCassandraRepository<T, ID> implements CassandraRepository<T, 
 		operations.getCqlOperations().execute(insert);
 
 		return entity;
+	}
+
+	public void setSpaceId(){
+		Builder builder = Cluster.builder();
+		builder.addContactPoints("127.0.0.1");
+		builder.withPort(9042);
+		Cluster cluster = builder.build();
+		Session session = cluster.connect("abcd");
+		this.operations = new CassandraTemplate(session);
 	}
 
 	/* (non-Javadoc)
